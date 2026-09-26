@@ -5,6 +5,7 @@ import json
 import random
 import base64
 from datetime import datetime
+import streamlit.components.v1 as components
 
 # ==========================================
 # PAGE CONFIGURATION
@@ -104,7 +105,7 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         cursor.execute('''
             INSERT INTO site_settings (store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp)
-            VALUES ('APEQ MARKET PLACE', 'Your ultimate destination for quality products at unbeatable prices.', 'admin123', '0794551087', 'support@apeqstore.com', 'https://facebook.com', 'https://instagram.com', 'https://wa.me/254794551087')
+            VALUES ('APEQ MARKET PLACE', 'Your ultimate destination for quality products at unbeatable prices.', 'admin123', '0778899112', 'support@apeqstore.com', 'https://facebook.com', 'https://instagram.com', 'https://wa.me/254778899112')
         ''')
         
     conn.commit()
@@ -128,6 +129,15 @@ if 'current_customer_phone' not in st.session_state:
 if 'active_nav' not in st.session_state:
     st.session_state.active_nav = "Storefront"
 
+if 'last_order' not in st.session_state:
+    st.session_state.last_order = None
+
+if 'user_lat' not in st.session_state:
+    st.session_state.user_lat = 0.0
+
+if 'user_lng' not in st.session_state:
+    st.session_state.user_lng = 0.0
+
 # ==========================================
 # HELPER FUNCTIONS
 # ==========================================
@@ -143,7 +153,7 @@ def get_settings():
         'email': 'support@apeqstore.com',
         'facebook': 'https://facebook.com',
         'instagram': 'https://instagram.com',
-        'whatsapp': 'https://wa.me/254794551087'
+        'whatsapp': 'https://wa.me/254778899112'
     }
 
 def update_settings(store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp):
@@ -412,100 +422,164 @@ if st.session_state.active_nav == "Storefront":
 elif st.session_state.active_nav.startswith("Cart"):
     st.title("🛒 Shopping Cart & Checkout")
     
-    if not st.session_state.cart:
+    if not st.session_state.cart and not st.session_state.last_order:
         st.info("Your cart is empty. Return to the storefront to add items.")
         if st.button("← Back to Storefront"):
             st.session_state.active_nav = "Storefront"
             st.rerun()
     else:
-        total_amount = 0.0
-        st.subheader("Selected Items")
-        
-        items_to_delete = []
-        for pid, cart_item in list(st.session_state.cart.items()):
-            prod = cart_item['product']
-            qty = cart_item['quantity']
-            item_total = prod['price'] * qty
-            total_amount += item_total
+        if st.session_state.cart:
+            total_amount = 0.0
+            st.subheader("Selected Items")
             
-            c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
-            with c1:
-                st.write(f"**{prod['title']}**")
-            with c2:
-                st.write(f"KSh {prod['price']:,.2f} x {qty}")
-            with c3:
-                new_qty = st.number_input("Qty", min_value=1, value=qty, key=f"qty_{pid}")
-                st.session_state.cart[pid]['quantity'] = new_qty
-            with c4:
-                if st.button("❌", key=f"del_cart_{pid}"):
-                    items_to_delete.append(pid)
+            items_to_delete = []
+            for pid, cart_item in list(st.session_state.cart.items()):
+                prod = cart_item['product']
+                qty = cart_item['quantity']
+                item_total = prod['price'] * qty
+                total_amount += item_total
+                
+                c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
+                with c1:
+                    st.write(f"**{prod['title']}**")
+                with c2:
+                    st.write(f"KSh {prod['price']:,.2f} x {qty}")
+                with c3:
+                    new_qty = st.number_input("Qty", min_value=1, value=qty, key=f"qty_{pid}")
+                    st.session_state.cart[pid]['quantity'] = new_qty
+                with c4:
+                    if st.button("❌", key=f"del_cart_{pid}"):
+                        items_to_delete.append(pid)
 
-        for pid in items_to_delete:
-            del st.session_state.cart[pid]
-            st.rerun()
+            for pid in items_to_delete:
+                del st.session_state.cart[pid]
+                st.rerun()
 
-        st.divider()
-        st.markdown(f"### Total Amount: **KSh {total_amount:,.2f}**")
-        st.success("💳 **PAYMENT AFTER DELIVERY** — No advance payment required!")
-        st.divider()
-        
-        st.subheader("Checkout & Account Details")
-        st.caption("Provide your details and password to register/login automatically and track orders.")
-        
-        with st.form("checkout_form"):
-            c_name = st.text_input("Full Name *")
-            c_phone = st.text_input("Phone Number *", value=st.session_state.current_customer_phone)
-            c_pass = st.text_input("Account Password (to log in later or track order) *", type="password")
-            c_landmark = st.text_area("Delivery Landmark / Address")
+            st.divider()
+            st.markdown(f"### Total Amount: **KSh {total_amount:,.2f}**")
+            st.success("💳 **PAYMENT AFTER DELIVERY** — No advance payment required!")
+            st.divider()
             
-            st.write("Optional: Provide GPS Location Coordinates")
-            c_lat = st.number_input("Latitude", value=0.0, format="%.6f")
-            c_lng = st.number_input("Longitude", value=0.0, format="%.6f")
+            st.subheader("Checkout & Delivery Details")
             
-            submit_order = st.form_submit_button("Place Order Now")
+            # --- GOOGLE MAPS / GPS PERMISSION SECTION ---
+            st.markdown("#### 📍 Delivery Location Access")
+            st.caption("Grant location access to share your exact GPS location for fast delivery.")
             
-            if submit_order:
-                if not c_name or not c_phone or not c_pass:
-                    st.error("Please fill in Name, Phone Number, and Password.")
-                else:
-                    success, msg = register_or_login_customer(c_phone, c_pass, c_name)
-                    if not success:
-                        st.error(msg)
+            # HTML/JS component for browser Geolocation request
+            geo_script = """
+            <script>
+            function getLocation() {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(showPosition, showError);
+                } else {
+                    alert("Geolocation is not supported by this browser.");
+                }
+            }
+            function showPosition(position) {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                window.parent.postMessage({
+                    type: "streamlit:setComponentValue",
+                    value: {lat: lat, lng: lng}
+                }, "*");
+            }
+            function showError(error) {
+                alert("Location request denied or unavailable.");
+            }
+            </script>
+            <button onclick="getLocation()" style="
+                background-color: #4CAF50;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 14px;
+            ">📍 Share My Current Location (Google Maps GPS)</button>
+            """
+            
+            location_data = components.html(geo_script, height=60)
+            
+            if location_data:
+                st.session_state.user_lat = location_data.get('lat', 0.0)
+                st.session_state.user_lng = location_data.get('lng', 0.0)
+                st.success(f"Location Captured! Latitude: {st.session_state.user_lat}, Longitude: {st.session_state.user_lng}")
+
+            # Optional Map Preview
+            if st.session_state.user_lat != 0.0 and st.session_state.user_lng != 0.0:
+                df_loc = pd.DataFrame({'lat': [st.session_state.user_lat], 'lon': [st.session_state.user_lng]})
+                st.map(df_loc, zoom=14)
+
+            # --- FORM CHECKOUT ---
+            with st.form("checkout_form"):
+                c_name = st.text_input("Full Name *")
+                c_phone = st.text_input("Phone Number *", value=st.session_state.current_customer_phone)
+                c_pass = st.text_input("Account Password (to log in later or track order) *", type="password")
+                c_landmark = st.text_area("Delivery Landmark / House Number / Street Name")
+                
+                # Auto-populated or manual fallback
+                c_lat = st.number_input("Latitude (Auto-filled via GPS)", value=float(st.session_state.user_lat), format="%.6f")
+                c_lng = st.number_input("Longitude (Auto-filled via GPS)", value=float(st.session_state.user_lng), format="%.6f")
+                
+                submit_order = st.form_submit_button("Place Order Now")
+                
+                if submit_order:
+                    if not c_name or not c_phone or not c_pass:
+                        st.error("Please fill in Name, Phone Number, and Password.")
                     else:
-                        st.session_state.customer_logged_in = True
-                        st.session_state.current_customer_phone = c_phone
-                        
-                        items_summary = [
-                            {
-                                'id': item['product']['id'],
-                                'title': item['product']['title'],
-                                'price': item['product']['price'],
-                                'quantity': item['quantity']
-                            } for item in st.session_state.cart.values()
-                        ]
-                        now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                        order_code = create_order(
-                            c_name, c_phone, c_landmark,
-                            c_lat if c_lat != 0.0 else None,
-                            c_lng if c_lng != 0.0 else None,
-                            items_summary, total_amount
-                        )
-                        st.session_state.cart = {}
-                        st.balloons()
-                        st.success(f"Order Placed Successfully! Order Code: **{order_code}**")
-                        st.info("🚚 **PAYMENT AFTER DELIVERY:** You will pay when your package arrives.")
-                        
-                        # Generate Automatic Receipt
-                        receipt_txt = generate_receipt_text(order_code, c_name, c_phone, c_landmark, items_summary, total_amount, now_str)
-                        st.subheader("📄 Your Official Receipt")
-                        st.code(receipt_txt, language="text")
-                        
-                        st.download_button(
-                            label="🖨️ Download Official Receipt (TXT)",
-                            data=receipt_txt,
-                            file_name=f"Receipt_{order_code}.txt",
-                            mime="text/plain"
-                        )
+                        success, msg = register_or_login_customer(c_phone, c_pass, c_name)
+                        if not success:
+                            st.error(msg)
+                        else:
+                            st.session_state.customer_logged_in = True
+                            st.session_state.current_customer_phone = c_phone
+                            
+                            items_summary = [
+                                {
+                                    'id': item['product']['id'],
+                                    'title': item['product']['title'],
+                                    'price': item['product']['price'],
+                                    'quantity': item['quantity']
+                                } for item in st.session_state.cart.values()
+                            ]
+                            now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+                            order_code = create_order(
+                                c_name, c_phone, c_landmark,
+                                c_lat if c_lat != 0.0 else None,
+                                c_lng if c_lng != 0.0 else None,
+                                items_summary, total_amount
+                            )
+                            st.session_state.cart = {}
+                            st.session_state.last_order = {
+                                'code': order_code,
+                                'name': c_name,
+                                'phone': c_phone,
+                                'landmark': c_landmark,
+                                'items': items_summary,
+                                'total': total_amount,
+                                'date': now_str
+                            }
+                            st.rerun()
+
+        # Display Receipt Outside Form
+        if st.session_state.last_order:
+            lo = st.session_state.last_order
+            st.balloons()
+            st.success(f"Order Placed Successfully! Order Code: **{lo['code']}**")
+            st.info("🚚 **PAYMENT AFTER DELIVERY:** You will pay when your package arrives.")
+            
+            receipt_txt = generate_receipt_text(lo['code'], lo['name'], lo['phone'], lo['landmark'], lo['items'], lo['total'], lo['date'])
+            st.subheader("📄 Your Official Receipt")
+            st.code(receipt_txt, language="text")
+            
+            st.download_button(
+                label="🖨️ Download Official Receipt (TXT)",
+                data=receipt_txt,
+                file_name=f"Receipt_{lo['code']}.txt",
+                mime="text/plain"
+            )
 
 # ==========================================
 # VIEW 3: TRACK / MY ORDERS
@@ -657,7 +731,10 @@ elif st.session_state.active_nav == "Admin Portal" and st.session_state.admin_lo
                     st.write(f"**Created At:** {ord_item['created_at']}")
                     
                     if ord_item['latitude'] and ord_item['longitude']:
-                        st.write("**Customer GPS Location:**")
+                        st.write("**Customer GPS Location (Google Maps Pin):**")
+                        maps_url = f"https://www.google.com/maps?q={ord_item['latitude']},{ord_item['longitude']}"
+                        st.markdown(f"👉 [Open Direct Location on Google Maps]({maps_url})")
+                        
                         df_map = pd.DataFrame({'lat': [ord_item['latitude']], 'lon': [ord_item['longitude']]})
                         st.map(df_map, zoom=13)
                     
