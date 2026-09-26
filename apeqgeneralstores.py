@@ -7,6 +7,13 @@ import base64
 from datetime import datetime
 import streamlit.components.v1 as components
 
+# Safe import for browser geolocation
+try:
+    from streamlit_js_eval import get_geolocation
+    HAS_GEO = True
+except ImportError:
+    HAS_GEO = False
+
 # ==========================================
 # PAGE CONFIGURATION
 # ==========================================
@@ -149,11 +156,11 @@ def get_settings():
         'store_name': 'APEQ MARKET PLACE',
         'store_description': 'Your ultimate destination for quality products at unbeatable prices.',
         'admin_password': 'admin123',
-        'phone': '0794551087',
+        'phone': '0778899112',
         'email': 'support@apeqstore.com',
         'facebook': 'https://facebook.com',
         'instagram': 'https://instagram.com',
-        'whatsapp': 'https://wa.me/254778899112'
+        'whatsapp': 'https://wa.me/254794551087'
     }
 
 def update_settings(store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp):
@@ -462,50 +469,18 @@ elif st.session_state.active_nav.startswith("Cart"):
             
             st.subheader("Checkout & Delivery Details")
             
-            # --- GOOGLE MAPS / GPS PERMISSION SECTION ---
+            # --- SAFE GEOLOCATION HANDLER ---
             st.markdown("#### 📍 Delivery Location Access")
-            st.caption("Grant location access to share your exact GPS location for fast delivery.")
+            st.caption("Allow location access to pin your location on Google Maps for fast delivery.")
             
-            # HTML/JS component for browser Geolocation request
-            geo_script = """
-            <script>
-            function getLocation() {
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(showPosition, showError);
-                } else {
-                    alert("Geolocation is not supported by this browser.");
-                }
-            }
-            function showPosition(position) {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                window.parent.postMessage({
-                    type: "streamlit:setComponentValue",
-                    value: {lat: lat, lng: lng}
-                }, "*");
-            }
-            function showError(error) {
-                alert("Location request denied or unavailable.");
-            }
-            </script>
-            <button onclick="getLocation()" style="
-                background-color: #4CAF50;
-                color: white;
-                padding: 10px 20px;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                font-weight: bold;
-                font-size: 14px;
-            ">📍 Share My Current Location (Google Maps GPS)</button>
-            """
-            
-            location_data = components.html(geo_script, height=60)
-            
-            if location_data:
-                st.session_state.user_lat = location_data.get('lat', 0.0)
-                st.session_state.user_lng = location_data.get('lng', 0.0)
-                st.success(f"Location Captured! Latitude: {st.session_state.user_lat}, Longitude: {st.session_state.user_lng}")
+            if HAS_GEO:
+                loc_data = get_geolocation()
+                if loc_data and isinstance(loc_data, dict) and 'coords' in loc_data:
+                    st.session_state.user_lat = loc_data['coords']['latitude']
+                    st.session_state.user_lng = loc_data['coords']['longitude']
+                    st.success(f"📍 GPS Location Captured: Lat {st.session_state.user_lat:.5f}, Lng {st.session_state.user_lng:.5f}")
+            else:
+                st.info("Add `streamlit-js-eval` to `requirements.txt` for automatic location detection.")
 
             # Optional Map Preview
             if st.session_state.user_lat != 0.0 and st.session_state.user_lng != 0.0:
@@ -519,9 +494,9 @@ elif st.session_state.active_nav.startswith("Cart"):
                 c_pass = st.text_input("Account Password (to log in later or track order) *", type="password")
                 c_landmark = st.text_area("Delivery Landmark / House Number / Street Name")
                 
-                # Auto-populated or manual fallback
-                c_lat = st.number_input("Latitude (Auto-filled via GPS)", value=float(st.session_state.user_lat), format="%.6f")
-                c_lng = st.number_input("Longitude (Auto-filled via GPS)", value=float(st.session_state.user_lng), format="%.6f")
+                # Auto-populated or manual input
+                c_lat = st.number_input("Latitude (Auto-filled or manual)", value=float(st.session_state.user_lat), format="%.6f")
+                c_lng = st.number_input("Longitude (Auto-filled or manual)", value=float(st.session_state.user_lng), format="%.6f")
                 
                 submit_order = st.form_submit_button("Place Order Now")
                 
