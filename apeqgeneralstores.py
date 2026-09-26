@@ -10,7 +10,7 @@ from datetime import datetime
 # PAGE CONFIGURATION
 # ==========================================
 st.set_page_config(
-    page_title="APEQSTORE",
+    page_title="APEQ MARKET PLACE",
     page_icon="🛍️",
     layout="wide"
 )
@@ -71,7 +71,8 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS site_settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            store_name TEXT DEFAULT 'APEQSTORE',
+            store_name TEXT DEFAULT 'APEQ MARKET PLACE',
+            store_description TEXT DEFAULT 'Your ultimate destination for quality products at unbeatable prices.',
             admin_password TEXT DEFAULT 'admin123',
             phone TEXT DEFAULT '0794551087',
             email TEXT DEFAULT 'support@apeqstore.com',
@@ -92,12 +93,18 @@ def init_db():
         )
     ''')
 
+    # Check and add store_description column if missing
+    cursor.execute("PRAGMA table_info(site_settings)")
+    cols = [column[1] for column in cursor.fetchall()]
+    if 'store_description' not in cols:
+        cursor.execute("ALTER TABLE site_settings ADD COLUMN store_description TEXT DEFAULT 'Your ultimate destination for quality products at unbeatable prices.'")
+
     # Seed settings if empty
     cursor.execute("SELECT COUNT(*) FROM site_settings")
     if cursor.fetchone()[0] == 0:
         cursor.execute('''
-            INSERT INTO site_settings (store_name, admin_password, phone, email, facebook, instagram, whatsapp)
-            VALUES ('APEQSTORE', 'admin123', '0794551087', 'support@apeqstore.com', 'https://facebook.com', 'https://instagram.com', 'https://wa.me/254794551087')
+            INSERT INTO site_settings (store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp)
+            VALUES ('APEQ MARKET PLACE', 'Your ultimate destination for quality products at unbeatable prices.', 'admin123', '0794551087', 'support@apeqstore.com', 'https://facebook.com', 'https://instagram.com', 'https://wa.me/254794551087')
         ''')
         
     conn.commit()
@@ -122,14 +129,15 @@ if 'active_nav' not in st.session_state:
     st.session_state.active_nav = "Storefront"
 
 # ==========================================
-# HELPER DATABASE FUNCTIONS
+# HELPER FUNCTIONS
 # ==========================================
 def get_settings():
     conn = get_db_connection()
     setting = conn.execute("SELECT * FROM site_settings LIMIT 1").fetchone()
     conn.close()
     return dict(setting) if setting else {
-        'store_name': 'APEQSTORE',
+        'store_name': 'APEQ MARKET PLACE',
+        'store_description': 'Your ultimate destination for quality products at unbeatable prices.',
         'admin_password': 'admin123',
         'phone': '0794551087',
         'email': 'support@apeqstore.com',
@@ -138,11 +146,11 @@ def get_settings():
         'whatsapp': 'https://wa.me/254794551087'
     }
 
-def update_settings(store_name, admin_password, phone, email, facebook, instagram, whatsapp):
+def update_settings(store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp):
     conn = get_db_connection()
     conn.execute('''
-        UPDATE site_settings SET store_name=?, admin_password=?, phone=?, email=?, facebook=?, instagram=?, whatsapp=? WHERE id=1
-    ''', (store_name, admin_password, phone, email, facebook, instagram, whatsapp))
+        UPDATE site_settings SET store_name=?, store_description=?, admin_password=?, phone=?, email=?, facebook=?, instagram=?, whatsapp=? WHERE id=1
+    ''', (store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp))
     conn.commit()
     conn.close()
 
@@ -261,9 +269,39 @@ def delete_review(review_id):
     conn.commit()
     conn.close()
 
-# Settings
+def generate_receipt_text(order_code, name, phone, landmark, items, total_amount, date_str):
+    receipt = f"""
+==================================================
+              APEQ MARKET PLACE
+            OFFICIAL ORDER RECEIPT
+==================================================
+Order Code   : {order_code}
+Date         : {date_str}
+Customer     : {name}
+Phone Number : {phone}
+Address      : {landmark or 'N/A'}
+Payment Type : PAYMENT AFTER DELIVERY
+--------------------------------------------------
+ITEMS ORDERED:
+"""
+    for idx, item in enumerate(items, 1):
+        qty = item.get('quantity', 1)
+        price = item.get('price', 0.0)
+        receipt += f"{idx}. {item['title']} (x{qty}) - KSh {price * qty:,.2f}\n"
+
+    receipt += f"""--------------------------------------------------
+TOTAL AMOUNT DUE : KSh {total_amount:,.2f}
+==================================================
+Thank you for shopping with APEQ MARKET PLACE!
+For inquiries: {settings.get('phone', '')} | {settings.get('email', '')}
+==================================================
+"""
+    return receipt
+
+# Fetch active settings
 settings = get_settings()
-STORE_NAME = settings.get('store_name', 'APEQSTORE')
+STORE_NAME = settings.get('store_name', 'APEQ MARKET PLACE')
+STORE_DESC = settings.get('store_description', 'Your ultimate destination for quality products at unbeatable prices.')
 ADMIN_PASSWORD = settings.get('admin_password', 'admin123')
 
 # Total Cart Count
@@ -286,16 +324,28 @@ st.session_state.active_nav = selected_nav
 # Customer Session Box
 st.sidebar.divider()
 if st.session_state.customer_logged_in:
-    st.sidebar.success(f"👤 Logged in: {st.session_state.current_customer_phone}")
+    st.sidebar.success(f"👤 Account: {st.session_state.current_customer_phone}")
     if st.sidebar.button("Logout Account"):
         st.session_state.customer_logged_in = False
         st.session_state.current_customer_phone = ""
         st.rerun()
 
-st.sidebar.markdown("### 📞 Contact Info")
-st.sidebar.text(f"Phone: {settings.get('phone', '')}")
-st.sidebar.text(f"Email: {settings.get('email', '')}")
-st.sidebar.markdown(f"[WhatsApp Chat]({settings.get('whatsapp', '#')})")
+# Social Media & Contact Panel
+st.sidebar.markdown("### 🌐 Social & Support")
+st.sidebar.markdown(f"📞 **Phone:** {settings.get('phone', '')}")
+st.sidebar.markdown(f"✉️ **Email:** {settings.get('email', '')}")
+
+st.sidebar.markdown("**Connect with Us:**")
+c_soc1, c_soc2, c_soc3 = st.sidebar.columns(3)
+with c_soc1:
+    if settings.get('whatsapp'):
+        st.markdown(f"[💬 WhatsApp]({settings.get('whatsapp')})")
+with c_soc2:
+    if settings.get('facebook'):
+        st.markdown(f"[📘 Facebook]({settings.get('facebook')})")
+with c_soc3:
+    if settings.get('instagram'):
+        st.markdown(f"[📷 Instagram]({settings.get('instagram')})")
 
 st.sidebar.divider()
 
@@ -319,7 +369,8 @@ else:
 # VIEW 1: STOREFRONT
 # ==========================================
 if st.session_state.active_nav == "Storefront":
-    st.title(f"🛒 {STORE_NAME} Catalog")
+    st.title(f"🛒 {STORE_NAME}")
+    st.markdown(f"*{STORE_DESC}*")
     st.info("🚚 **PAYMENT AFTER DELIVERY** — Shop with confidence and pay when your order arrives!")
     
     search_query = st.text_input("🔍 Search products by name...", "")
@@ -349,7 +400,6 @@ if st.session_state.active_nav == "Storefront":
                         else:
                             st.session_state.cart[pid] = {'product': prod, 'quantity': 1}
                         
-                        # Automatically direct user to Cart view
                         st.session_state.active_nav = f"Cart ({sum(item['quantity'] for item in st.session_state.cart.values())})"
                         st.toast(f"Added {prod['title']}! Opening Cart...", icon="🛒")
                         st.rerun()
@@ -433,6 +483,7 @@ elif st.session_state.active_nav.startswith("Cart"):
                                 'quantity': item['quantity']
                             } for item in st.session_state.cart.values()
                         ]
+                        now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
                         order_code = create_order(
                             c_name, c_phone, c_landmark,
                             c_lat if c_lat != 0.0 else None,
@@ -441,14 +492,26 @@ elif st.session_state.active_nav.startswith("Cart"):
                         )
                         st.session_state.cart = {}
                         st.balloons()
-                        st.success(f"Order Placed Successfully! Your Order Code is: **{order_code}**")
-                        st.info("🚚 **PAYMENT AFTER DELIVERY:** You will pay when your package arrives. Track your orders under 'Track / My Orders'.")
+                        st.success(f"Order Placed Successfully! Order Code: **{order_code}**")
+                        st.info("🚚 **PAYMENT AFTER DELIVERY:** You will pay when your package arrives.")
+                        
+                        # Generate Automatic Receipt
+                        receipt_txt = generate_receipt_text(order_code, c_name, c_phone, c_landmark, items_summary, total_amount, now_str)
+                        st.subheader("📄 Your Official Receipt")
+                        st.code(receipt_txt, language="text")
+                        
+                        st.download_button(
+                            label="🖨️ Download Official Receipt (TXT)",
+                            data=receipt_txt,
+                            file_name=f"Receipt_{order_code}.txt",
+                            mime="text/plain"
+                        )
 
 # ==========================================
 # VIEW 3: TRACK / MY ORDERS
 # ==========================================
 elif st.session_state.active_nav == "Track / My Orders":
-    st.title("📦 Order Tracking & History")
+    st.title("📦 Order Tracking & Automatic Receipts")
     
     if not st.session_state.customer_logged_in:
         st.subheader("Login to View Your Orders")
@@ -476,12 +539,26 @@ elif st.session_state.active_nav == "Track / My Orders":
                 if found_orders:
                     st.success(f"Found {len(found_orders)} order(s):")
                     for ord_item in found_orders:
+                        items = json.loads(ord_item['items_json'])
                         with st.expander(f"Order {ord_item['order_code']} - {ord_item['status']} (KSh {ord_item['total_amount']:,.2f})"):
                             st.write(f"**Date:** {ord_item['created_at']}")
-                            st.write(f"**Landmark:** {ord_item['landmark']}")
+                            st.write(f"**Address:** {ord_item['landmark']}")
                             st.write("**Items:**")
-                            for it in json.loads(ord_item['items_json']):
+                            for it in items:
                                 st.write(f"- {it['title']} x {it.get('quantity', 1)} (KSh {it['price']:,.2f})")
+                                
+                            receipt_data = generate_receipt_text(
+                                ord_item['order_code'], ord_item['customer_name'],
+                                ord_item['customer_phone'], ord_item['landmark'],
+                                items, ord_item['total_amount'], ord_item['created_at']
+                            )
+                            st.download_button(
+                                label="🖨️ Download Receipt",
+                                data=receipt_data,
+                                file_name=f"Receipt_{ord_item['order_code']}.txt",
+                                mime="text/plain",
+                                key=f"dl_unlog_{ord_item['id']}"
+                            )
                 else:
                     st.error("No matching orders found.")
             else:
@@ -495,12 +572,26 @@ elif st.session_state.active_nav == "Track / My Orders":
             st.info("No past orders found for your account.")
         else:
             for ord_item in my_orders:
+                items = json.loads(ord_item['items_json'])
                 with st.expander(f"Order {ord_item['order_code']} — Status: `{ord_item['status']}` — KSh {ord_item['total_amount']:,.2f}"):
                     st.write(f"**Placed On:** {ord_item['created_at']}")
                     st.write(f"**Address/Landmark:** {ord_item['landmark']}")
                     st.write("**Items Ordered:**")
-                    for it in json.loads(ord_item['items_json']):
+                    for it in items:
                         st.write(f"- {it['title']} x {it.get('quantity', 1)} (KSh {it['price']:,.2f})")
+                    
+                    receipt_data = generate_receipt_text(
+                        ord_item['order_code'], ord_item['customer_name'],
+                        ord_item['customer_phone'], ord_item['landmark'],
+                        items, ord_item['total_amount'], ord_item['created_at']
+                    )
+                    st.download_button(
+                        label="🖨️ Download Receipt",
+                        data=receipt_data,
+                        file_name=f"Receipt_{ord_item['order_code']}.txt",
+                        mime="text/plain",
+                        key=f"dl_log_{ord_item['id']}"
+                    )
 
 # ==========================================
 # VIEW 4: CUSTOMER REVIEWS
@@ -558,6 +649,7 @@ elif st.session_state.active_nav == "Admin Portal" and st.session_state.admin_lo
                 orders = [o for o in orders if o['status'] == filter_status]
                 
             for ord_item in orders:
+                items = json.loads(ord_item['items_json'])
                 with st.expander(f"Order {ord_item['order_code']} - {ord_item['customer_name']} [{ord_item['status']}]"):
                     st.write(f"**Phone:** {ord_item['customer_phone']}")
                     st.write(f"**Landmark:** {ord_item['landmark']}")
@@ -570,9 +662,22 @@ elif st.session_state.active_nav == "Admin Portal" and st.session_state.admin_lo
                         st.map(df_map, zoom=13)
                     
                     st.write("**Items:**")
-                    for it in json.loads(ord_item['items_json']):
+                    for it in items:
                         qty = it.get('quantity', 1)
                         st.write(f"- {it['title']} (KSh {it['price']:,.2f} x {qty})")
+                    
+                    receipt_data = generate_receipt_text(
+                        ord_item['order_code'], ord_item['customer_name'],
+                        ord_item['customer_phone'], ord_item['landmark'],
+                        items, ord_item['total_amount'], ord_item['created_at']
+                    )
+                    st.download_button(
+                        label="🖨️ Print / Download Receipt",
+                        data=receipt_data,
+                        file_name=f"Receipt_{ord_item['order_code']}.txt",
+                        mime="text/plain",
+                        key=f"dl_admin_{ord_item['id']}"
+                    )
                     
                     c_st, c_del = st.columns([3, 1])
                     with c_st:
@@ -682,11 +787,12 @@ elif st.session_state.active_nav == "Admin Portal" and st.session_state.admin_lo
         curr_set = get_settings()
         
         with st.form("settings_form"):
-            s_name = st.text_input("Store Name", value=curr_set.get('store_name', 'APEQSTORE'))
+            s_name = st.text_input("Business / Store Name", value=curr_set.get('store_name', 'APEQ MARKET PLACE'))
+            s_desc = st.text_area("Business Description (Appears below business name)", value=curr_set.get('store_description', 'Your ultimate destination for quality products at unbeatable prices.'))
             s_pass = st.text_input("Admin Password", value=curr_set.get('admin_password', 'admin123'), type="password")
             
             st.divider()
-            st.subheader("Contact Information")
+            st.subheader("Contact & Social Links")
             s_phone = st.text_input("Phone Number", value=curr_set.get('phone', ''))
             s_email = st.text_input("Support Email", value=curr_set.get('email', ''))
             s_fb = st.text_input("Facebook URL", value=curr_set.get('facebook', ''))
@@ -694,6 +800,6 @@ elif st.session_state.active_nav == "Admin Portal" and st.session_state.admin_lo
             s_wa = st.text_input("WhatsApp Link", value=curr_set.get('whatsapp', ''))
             
             if st.form_submit_button("Save All Settings"):
-                update_settings(s_name, s_pass, s_phone, s_email, s_fb, s_ig, s_wa)
+                update_settings(s_name, s_desc, s_pass, s_phone, s_email, s_fb, s_ig, s_wa)
                 st.success("Settings updated successfully!")
                 st.rerun()
