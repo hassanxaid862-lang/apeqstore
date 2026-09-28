@@ -112,7 +112,7 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         cursor.execute('''
             INSERT INTO site_settings (store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp)
-            VALUES ('APEQ MARKET PLACE', 'Your ultimate destination for quality products at unbeatable prices.', 'admin123', '0778899112', 'support@apeqstore.com', 'https://facebook.com', 'https://instagram.com', 'https://wa.me/254778899112')
+            VALUES ('APEQ MARKET PLACE', 'Your ultimate destination for quality products at unbeatable prices.', 'admin123', '0794551087', 'support@apeqstore.com', 'https://facebook.com', 'https://instagram.com', 'https://wa.me/254778899112')
         ''')
         
     conn.commit()
