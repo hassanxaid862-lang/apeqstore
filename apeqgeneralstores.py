@@ -112,7 +112,7 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         cursor.execute('''
             INSERT INTO site_settings (store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp)
-            VALUES ('APEQ MARKET PLACE', 'Your ultimate destination for quality products at unbeatable prices.', 'admin123', '0794551087', 'support@apeqstore.com', 'https://facebook.com', 'https://instagram.com', 'https://wa.me/254778899112')
+            VALUES ('APEQ MARKET PLACE', 'Your ultimate destination for quality products at unbeatable prices.', 'admin123', '0794551087', 'support@apeqstore.com', 'https://facebook.com', 'https://instagram.com', 'https://wa.me/254794551087')
         ''')
         
     conn.commit()
@@ -156,7 +156,7 @@ def get_settings():
         'store_name': 'APEQ MARKET PLACE',
         'store_description': 'Your ultimate destination for quality products at unbeatable prices.',
         'admin_password': 'admin123',
-        'phone': '0778899112',
+        'phone': '0794551087',
         'email': 'support@apeqstore.com',
         'facebook': 'https://facebook.com',
         'instagram': 'https://instagram.com',
@@ -213,12 +213,6 @@ def toggle_stock(product_id, current_stock):
 def delete_product(product_id):
     conn = get_db_connection()
     conn.execute("DELETE FROM products WHERE id=?", (product_id,))
-    conn.commit()
-    conn.close()
-
-def delete_all_products():
-    conn = get_db_connection()
-    conn.execute("DELETE FROM products")
     conn.commit()
     conn.close()
 
@@ -785,14 +779,7 @@ elif st.session_state.active_nav == "Admin Portal" and st.session_state.admin_lo
                     st.error("Please fill in the required fields and provide an image.")
                     
         st.divider()
-        col_hdr1, col_hdr2 = st.columns([3, 1])
-        with col_hdr1:
-            st.subheader("Existing Products")
-        with col_hdr2:
-            if st.button("⚠️ Clear All Products"):
-                delete_all_products()
-                st.success("All products cleared!")
-                st.rerun()
+        st.subheader("Existing Products")
 
         prods = get_products()
         if not prods:
