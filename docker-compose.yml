@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  apeq-store:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./apeqstore.db:/app/apeqstore.db
+    restart: always
