@@ -157,8 +157,8 @@ def get_settings():
         'store_description': 'Your ultimate destination for quality products at unbeatable prices.',
         'admin_password': 'admin123',
         'phone': '0794551087',
-        'email': 'support@apeqstore.com',
-        'facebook': 'https://facebook.com',
+        'email': 'hassanxaid862@gmail.com',
+        'facebook': 'https://www.facebook.com/profile.php?id=61560130962104',
         'instagram': 'https://instagram.com',
         'whatsapp': 'https://wa.me/254794551087'
     }
