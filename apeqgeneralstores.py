@@ -83,8 +83,8 @@ def init_db():
             store_description TEXT DEFAULT 'Your ultimate destination for quality products at unbeatable prices.',
             admin_password TEXT DEFAULT 'admin123',
             phone TEXT DEFAULT '0794551087',
-            email TEXT DEFAULT 'support@apeqstore.com',
-            facebook TEXT DEFAULT 'https://facebook.com',
+            email TEXT DEFAULT 'hassanxaidi862@gmail.com',
+            facebook TEXT DEFAULT 'https://www.facebook.com/profile.php?id=61560130962104',
             instagram TEXT DEFAULT 'https://instagram.com',
             whatsapp TEXT DEFAULT 'https://wa.me/254794551087'
         )
