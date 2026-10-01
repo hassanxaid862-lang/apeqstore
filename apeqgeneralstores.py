@@ -291,7 +291,7 @@ Date         : {date_str}
 Customer     : {name}
 Phone Number : {phone}
 Address      : {landmark or 'N/A'}
-Payment Type : PAYMENT AFTER DELIVERY
+Payment Type : PAYMENT ON DELIVERY
 --------------------------------------------------
 ITEMS ORDERED:
 """
@@ -326,7 +326,7 @@ st.sidebar.title(f"🛍️ {STORE_NAME}")
 nav_options = ["Storefront", "Track / My Orders", f"Cart ({total_cart_items})", "Customer Reviews"]
 
 if st.session_state.admin_logged_in:
-    nav_options.append("Admin Portal")
+    nav_options.append("Admin access")
 
 # Sidebar navigation synchronization
 selected_nav = st.sidebar.radio("Navigate", nav_options, index=nav_options.index(st.session_state.active_nav) if st.session_state.active_nav in nav_options else 0)
@@ -342,9 +342,9 @@ if st.session_state.customer_logged_in:
         st.rerun()
 
 # Social Media & Contact Panel
-st.sidebar.markdown("### 🌐 Social & Support")
+st.sidebar.markdown("### Social Connections")
 st.sidebar.markdown(f"📞 **Phone:** {settings.get('phone', '')}")
-st.sidebar.markdown(f"✉️ **Email:** {settings.get('email', '')}")
+st.sidebar.markdown(f"✉️ **Email Us:** {settings.get('email', '')}")
 
 st.sidebar.markdown("**Connect with Us:**")
 c_soc1, c_soc2, c_soc3 = st.sidebar.columns(3)
@@ -382,9 +382,9 @@ else:
 if st.session_state.active_nav == "Storefront":
     st.title(f"🛒 {STORE_NAME}")
     st.markdown(f"*{STORE_DESC}*")
-    st.info("🚚 **PAYMENT AFTER DELIVERY** — Shop with confidence and pay when your order arrives!")
+    st.info("🚚 **PAYMENT ON DELIVERY** — Shop with confidence and pay when your order arrives!")
     
-    search_query = st.text_input("🔍 Search products by name...", "")
+    search_query = st.text_input("Search products by name...", "")
     products = get_products()
     
     if search_query:
@@ -458,7 +458,7 @@ elif st.session_state.active_nav.startswith("Cart"):
 
             st.divider()
             st.markdown(f"### Total Amount: **KSh {total_amount:,.2f}**")
-            st.success("💳 **PAYMENT AFTER DELIVERY** — No advance payment required!")
+            st.success("💳 **PAYMENT ON DELIVERY** — No advance payment required!")
             st.divider()
             
             st.subheader("Checkout & Delivery Details")
@@ -544,7 +544,7 @@ elif st.session_state.active_nav.startswith("Cart"):
             st.code(receipt_txt, language="text")
             
             st.download_button(
-                label="🖨️ Download Official Receipt (TXT)",
+                label="Download Official Receipt (TXT)",
                 data=receipt_txt,
                 file_name=f"Receipt_{lo['code']}.txt",
                 mime="text/plain"
@@ -554,7 +554,7 @@ elif st.session_state.active_nav.startswith("Cart"):
 # VIEW 3: TRACK / MY ORDERS
 # ==========================================
 elif st.session_state.active_nav == "Track / My Orders":
-    st.title("📦 Order Tracking & Automatic Receipts")
+    st.title("Order Tracking & Automatic Receipts")
     
     if not st.session_state.customer_logged_in:
         st.subheader("Login to View Your Orders")
@@ -596,7 +596,7 @@ elif st.session_state.active_nav == "Track / My Orders":
                                 items, ord_item['total_amount'], ord_item['created_at']
                             )
                             st.download_button(
-                                label="🖨️ Download Receipt",
+                                label="Download Receipt",
                                 data=receipt_data,
                                 file_name=f"Receipt_{ord_item['order_code']}.txt",
                                 mime="text/plain",
@@ -629,7 +629,7 @@ elif st.session_state.active_nav == "Track / My Orders":
                         items, ord_item['total_amount'], ord_item['created_at']
                     )
                     st.download_button(
-                        label="🖨️ Download Receipt",
+                        label="Download Receipt",
                         data=receipt_data,
                         file_name=f"Receipt_{ord_item['order_code']}.txt",
                         mime="text/plain",
