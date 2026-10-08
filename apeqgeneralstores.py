@@ -1,11 +1,12 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 import json
 import random
 import base64
+import os
+import psycopg2
+import psycopg2.extras
 from datetime import datetime
-import streamlit.components.v1 as components
 
 # Safe import for browser geolocation
 try:
@@ -23,100 +24,101 @@ st.set_page_config(
     layout="wide"
 )
 
-DB_FILE = "apeqstore.db"
+# Fetch Database Connection URL from Secrets
+DATABASE_URL = st.secrets.get("DATABASE_URL", os.getenv("DATABASE_URL", ""))
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+    if not DATABASE_URL:
+        st.error("❌ DATABASE_URL is missing! Please set it in Streamlit Secrets.")
+        st.stop()
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
     return conn
 
 def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Customers Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS customers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            phone TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            name TEXT,
-            created_at TEXT
-        )
-    ''')
-    
-    # Products Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            price REAL NOT NULL,
-            image TEXT NOT NULL,
-            description TEXT NOT NULL,
-            in_stock INTEGER DEFAULT 1,
-            created_at TEXT
-        )
-    ''')
-    
-    # Orders Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            order_code TEXT UNIQUE NOT NULL,
-            customer_name TEXT NOT NULL,
-            customer_phone TEXT NOT NULL,
-            landmark TEXT,
-            latitude REAL,
-            longitude REAL,
-            items_json TEXT NOT NULL,
-            total_amount REAL NOT NULL,
-            status TEXT DEFAULT 'Pending',
-            created_at TEXT
-        )
-    ''')
-    
-    # Settings Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS site_settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            store_name TEXT DEFAULT 'APEQ MARKET PLACE',
-            store_description TEXT DEFAULT 'Your ultimate destination for quality products at unbeatable prices.',
-            admin_password TEXT DEFAULT 'admin123',
-            phone TEXT DEFAULT '0794551087',
-            email TEXT DEFAULT 'hassanxaidi862@gmail.com',
-            facebook TEXT DEFAULT 'https://www.facebook.com/profile.php?id=61560130962104',
-            instagram TEXT DEFAULT 'https://instagram.com',
-            whatsapp TEXT DEFAULT 'https://wa.me/254794551087'
-        )
-    ''')
-
-    # Reviews Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS reviews (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            reviewer_name TEXT NOT NULL,
-            rating INTEGER NOT NULL,
-            comment TEXT NOT NULL,
-            created_at TEXT
-        )
-    ''')
-
-    # Check and add store_description column if missing
-    cursor.execute("PRAGMA table_info(site_settings)")
-    cols = [column[1] for column in cursor.fetchall()]
-    if 'store_description' not in cols:
-        cursor.execute("ALTER TABLE site_settings ADD COLUMN store_description TEXT DEFAULT 'Your ultimate destination for quality products at unbeatable prices.'")
-
-    # Seed settings if empty
-    cursor.execute("SELECT COUNT(*) FROM site_settings")
-    if cursor.fetchone()[0] == 0:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Customers Table
         cursor.execute('''
-            INSERT INTO site_settings (store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp)
-            VALUES ('APEQ MARKET PLACE', 'Your ultimate destination for quality products at unbeatable prices.', 'admin123', '0794551087', 'hassanxaid862@gmail.com', 'https://www.facebook.com/profile.php?id=61560130962104', 'https://instagram.com', 'https://wa.me/254794551087')
+            CREATE TABLE IF NOT EXISTS customers (
+                id SERIAL PRIMARY KEY,
+                phone VARCHAR(50) UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         ''')
         
-    conn.commit()
-    conn.close()
+        # Products Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS products (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                price NUMERIC(12, 2) NOT NULL,
+                image TEXT NOT NULL,
+                description TEXT NOT NULL,
+                in_stock INT DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Orders Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS orders (
+                id SERIAL PRIMARY KEY,
+                order_code VARCHAR(50) UNIQUE NOT NULL,
+                customer_name TEXT NOT NULL,
+                customer_phone VARCHAR(50) NOT NULL,
+                landmark TEXT,
+                latitude DOUBLE PRECISION,
+                longitude DOUBLE PRECISION,
+                items_json TEXT NOT NULL,
+                total_amount NUMERIC(12, 2) NOT NULL,
+                status VARCHAR(50) DEFAULT 'Pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Settings Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS site_settings (
+                id SERIAL PRIMARY KEY,
+                store_name TEXT DEFAULT 'APEQ MARKET PLACE',
+                store_description TEXT DEFAULT 'Your ultimate destination for quality products at unbeatable prices.',
+                admin_password TEXT DEFAULT 'admin123',
+                phone TEXT DEFAULT '0794551087',
+                email TEXT DEFAULT 'hassanxaidi862@gmail.com',
+                facebook TEXT DEFAULT 'https://www.facebook.com/profile.php?id=61560130962104',
+                instagram TEXT DEFAULT 'https://instagram.com',
+                whatsapp TEXT DEFAULT 'https://wa.me/254794551087'
+            )
+        ''')
+
+        # Reviews Table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reviews (
+                id SERIAL PRIMARY KEY,
+                reviewer_name TEXT NOT NULL,
+                rating INT NOT NULL,
+                comment TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Seed settings if empty
+        cursor.execute("SELECT COUNT(*) FROM site_settings")
+        if cursor.fetchone()['count'] == 0:
+            cursor.execute('''
+                INSERT INTO site_settings (store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp)
+                VALUES ('APEQ MARKET PLACE', 'Your ultimate destination for quality products at unbeatable prices.', 'admin123', '0794551087', 'hassanxaid862@gmail.com', 'https://www.facebook.com/profile.php?id=61560130962104', 'https://instagram.com', 'https://wa.me/254794551087')
+            ''')
+            
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        st.error(f"Database Initialization Failed: {e}")
 
 init_db()
 
@@ -150,7 +152,10 @@ if 'user_lng' not in st.session_state:
 # ==========================================
 def get_settings():
     conn = get_db_connection()
-    setting = conn.execute("SELECT * FROM site_settings LIMIT 1").fetchone()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM site_settings LIMIT 1")
+    setting = cursor.fetchone()
+    cursor.close()
     conn.close()
     return dict(setting) if setting else {
         'store_name': 'APEQ MARKET PLACE',
@@ -165,83 +170,108 @@ def get_settings():
 
 def update_settings(store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp):
     conn = get_db_connection()
-    conn.execute('''
-        UPDATE site_settings SET store_name=?, store_description=?, admin_password=?, phone=?, email=?, facebook=?, instagram=?, whatsapp=? WHERE id=1
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE site_settings SET store_name=%s, store_description=%s, admin_password=%s, phone=%s, email=%s, facebook=%s, instagram=%s, whatsapp=%s WHERE id=1
     ''', (store_name, store_description, admin_password, phone, email, facebook, instagram, whatsapp))
     conn.commit()
+    cursor.close()
     conn.close()
 
 def register_or_login_customer(phone, password, name=""):
     conn = get_db_connection()
-    cust = conn.execute("SELECT * FROM customers WHERE phone=?", (phone,)).fetchone()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM customers WHERE phone=%s", (phone,))
+    cust = cursor.fetchone()
     if cust:
         if cust['password'] == password:
+            cursor.close()
             conn.close()
             return True, cust['name'] or name
         else:
+            cursor.close()
             conn.close()
             return False, "Incorrect password for this phone number."
     else:
-        conn.execute("INSERT INTO customers (phone, password, name, created_at) VALUES (?, ?, ?, ?)",
-                     (phone, password, name, datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')))
+        cursor.execute("INSERT INTO customers (phone, password, name) VALUES (%s, %s, %s)", (phone, password, name))
         conn.commit()
+        cursor.close()
         conn.close()
         return True, name
 
 def get_products():
     conn = get_db_connection()
-    products = conn.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products ORDER BY id DESC")
+    products = cursor.fetchall()
+    cursor.close()
     conn.close()
     return [dict(p) for p in products]
 
 def add_product(title, price, image_data, description, in_stock):
     conn = get_db_connection()
-    conn.execute('''
-        INSERT INTO products (title, price, image, description, in_stock, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (title, price, image_data, description, 1 if in_stock else 0, datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')))
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO products (title, price, image, description, in_stock)
+        VALUES (%s, %s, %s, %s, %s)
+    ''', (title, price, image_data, description, 1 if in_stock else 0))
     conn.commit()
+    cursor.close()
     conn.close()
 
 def toggle_stock(product_id, current_stock):
     conn = get_db_connection()
+    cursor = conn.cursor()
     new_stock = 0 if current_stock == 1 else 1
-    conn.execute("UPDATE products SET in_stock=? WHERE id=?", (new_stock, product_id))
+    cursor.execute("UPDATE products SET in_stock=%s WHERE id=%s", (new_stock, product_id))
     conn.commit()
+    cursor.close()
     conn.close()
 
 def delete_product(product_id):
     conn = get_db_connection()
-    conn.execute("DELETE FROM products WHERE id=?", (product_id,))
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM products WHERE id=%s", (product_id,))
     conn.commit()
+    cursor.close()
     conn.close()
 
 def create_order(name, phone, landmark, lat, lng, items, total):
     conn = get_db_connection()
+    cursor = conn.cursor()
     order_code = f"APEQ-{random.randint(100000, 999999)}"
-    conn.execute('''
-        INSERT INTO orders (order_code, customer_name, customer_phone, landmark, latitude, longitude, items_json, total_amount, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)
-    ''', (order_code, name, phone, landmark, lat, lng, json.dumps(items), total, datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')))
+    cursor.execute('''
+        INSERT INTO orders (order_code, customer_name, customer_phone, landmark, latitude, longitude, items_json, total_amount, status)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Pending')
+    ''', (order_code, name, phone, landmark, lat, lng, json.dumps(items), total))
     conn.commit()
+    cursor.close()
     conn.close()
     return order_code
 
 def get_orders():
     conn = get_db_connection()
-    orders = conn.execute("SELECT * FROM orders ORDER BY id DESC").fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders ORDER BY id DESC")
+    orders = cursor.fetchall()
+    cursor.close()
     conn.close()
     return [dict(o) for o in orders]
 
 def delete_order(order_id):
     conn = get_db_connection()
-    conn.execute("DELETE FROM orders WHERE id=?", (order_id,))
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM orders WHERE id=%s", (order_id,))
     conn.commit()
+    cursor.close()
     conn.close()
 
 def search_customer_orders(phone, product_name=""):
     conn = get_db_connection()
-    orders = conn.execute("SELECT * FROM orders WHERE customer_phone=? ORDER BY id DESC", (phone.strip(),)).fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE customer_phone=%s ORDER BY id DESC", (phone.strip(),))
+    orders = cursor.fetchall()
+    cursor.close()
     conn.close()
     result = [dict(o) for o in orders]
     if product_name:
@@ -255,29 +285,38 @@ def search_customer_orders(phone, product_name=""):
 
 def update_order_status(order_id, status):
     conn = get_db_connection()
-    conn.execute("UPDATE orders SET status=? WHERE id=?", (status, order_id))
+    cursor = conn.cursor()
+    cursor.execute("UPDATE orders SET status=%s WHERE id=%s", (status, order_id))
     conn.commit()
+    cursor.close()
     conn.close()
 
 def add_review(name, rating, comment):
     conn = get_db_connection()
-    conn.execute('''
-        INSERT INTO reviews (reviewer_name, rating, comment, created_at)
-        VALUES (?, ?, ?, ?)
-    ''', (name, rating, comment, datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')))
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO reviews (reviewer_name, rating, comment)
+        VALUES (%s, %s, %s)
+    ''', (name, rating, comment))
     conn.commit()
+    cursor.close()
     conn.close()
 
 def get_reviews():
     conn = get_db_connection()
-    reviews = conn.execute("SELECT * FROM reviews ORDER BY id DESC").fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM reviews ORDER BY id DESC")
+    reviews = cursor.fetchall()
+    cursor.close()
     conn.close()
     return [dict(r) for r in reviews]
 
 def delete_review(review_id):
     conn = get_db_connection()
-    conn.execute("DELETE FROM reviews WHERE id=?", (review_id,))
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM reviews WHERE id=%s", (review_id,))
     conn.commit()
+    cursor.close()
     conn.close()
 
 def generate_receipt_text(order_code, name, phone, landmark, items, total_amount, date_str):
@@ -297,11 +336,11 @@ ITEMS ORDERED:
 """
     for idx, item in enumerate(items, 1):
         qty = item.get('quantity', 1)
-        price = item.get('price', 0.0)
+        price = float(item.get('price', 0.0))
         receipt += f"{idx}. {item['title']} (x{qty}) - KSh {price * qty:,.2f}\n"
 
     receipt += f"""--------------------------------------------------
-TOTAL AMOUNT DUE : KSh {total_amount:,.2f}
+TOTAL AMOUNT DUE : KSh {float(total_amount):,.2f}
 ==================================================
 Thank you for shopping with APEQ MARKET PLACE!
 For inquiries: {settings.get('phone', '')} | {settings.get('email', '')}
@@ -399,7 +438,7 @@ if st.session_state.active_nav == "Storefront":
             with col:
                 st.image(prod['image'], use_container_width=True)
                 st.subheader(prod['title'])
-                st.write(f"**Price:** KSh {prod['price']:,.2f}")
+                st.write(f"**Price:** KSh {float(prod['price']):,.2f}")
                 st.caption(prod['description'])
                 
                 if prod['in_stock']:
@@ -437,14 +476,14 @@ elif st.session_state.active_nav.startswith("Cart"):
             for pid, cart_item in list(st.session_state.cart.items()):
                 prod = cart_item['product']
                 qty = cart_item['quantity']
-                item_total = prod['price'] * qty
+                item_total = float(prod['price']) * qty
                 total_amount += item_total
                 
                 c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
                 with c1:
                     st.write(f"**{prod['title']}**")
                 with c2:
-                    st.write(f"KSh {prod['price']:,.2f} x {qty}")
+                    st.write(f"KSh {float(prod['price']):,.2f} x {qty}")
                 with c3:
                     new_qty = st.number_input("Qty", min_value=1, value=qty, key=f"qty_{pid}")
                     st.session_state.cart[pid]['quantity'] = new_qty
@@ -463,7 +502,6 @@ elif st.session_state.active_nav.startswith("Cart"):
             
             st.subheader("Checkout & Delivery Details")
             
-            # --- SAFE GEOLOCATION HANDLER ---
             st.markdown("#### 📍 Delivery Location Access")
             st.caption("Allow location access to pin your location on Google Maps for fast delivery.")
             
@@ -476,19 +514,16 @@ elif st.session_state.active_nav.startswith("Cart"):
             else:
                 st.info("Add `streamlit-js-eval` to `requirements.txt` for automatic location detection.")
 
-            # Optional Map Preview
             if st.session_state.user_lat != 0.0 and st.session_state.user_lng != 0.0:
                 df_loc = pd.DataFrame({'lat': [st.session_state.user_lat], 'lon': [st.session_state.user_lng]})
                 st.map(df_loc, zoom=14)
 
-            # --- FORM CHECKOUT ---
             with st.form("checkout_form"):
                 c_name = st.text_input("Full Name *")
                 c_phone = st.text_input("Phone Number *", value=st.session_state.current_customer_phone)
                 c_pass = st.text_input("Account Password (to log in later or track order) *", type="password")
                 c_landmark = st.text_area("Delivery Landmark / House Number / Street Name")
                 
-                # Auto-populated or manual input
                 c_lat = st.number_input("Latitude (Auto-filled or manual)", value=float(st.session_state.user_lat), format="%.6f")
                 c_lng = st.number_input("Longitude (Auto-filled or manual)", value=float(st.session_state.user_lng), format="%.6f")
                 
@@ -509,7 +544,7 @@ elif st.session_state.active_nav.startswith("Cart"):
                                 {
                                     'id': item['product']['id'],
                                     'title': item['product']['title'],
-                                    'price': item['product']['price'],
+                                    'price': float(item['product']['price']),
                                     'quantity': item['quantity']
                                 } for item in st.session_state.cart.values()
                             ]
@@ -532,7 +567,6 @@ elif st.session_state.active_nav.startswith("Cart"):
                             }
                             st.rerun()
 
-        # Display Receipt Outside Form
         if st.session_state.last_order:
             lo = st.session_state.last_order
             st.balloons()
@@ -583,17 +617,17 @@ elif st.session_state.active_nav == "Track / My Orders":
                     st.success(f"Found {len(found_orders)} order(s):")
                     for ord_item in found_orders:
                         items = json.loads(ord_item['items_json'])
-                        with st.expander(f"Order {ord_item['order_code']} - {ord_item['status']} (KSh {ord_item['total_amount']:,.2f})"):
+                        with st.expander(f"Order {ord_item['order_code']} - {ord_item['status']} (KSh {float(ord_item['total_amount']):,.2f})"):
                             st.write(f"**Date:** {ord_item['created_at']}")
                             st.write(f"**Address:** {ord_item['landmark']}")
                             st.write("**Items:**")
                             for it in items:
-                                st.write(f"- {it['title']} x {it.get('quantity', 1)} (KSh {it['price']:,.2f})")
+                                st.write(f"- {it['title']} x {it.get('quantity', 1)} (KSh {float(it['price']):,.2f})")
                                 
                             receipt_data = generate_receipt_text(
                                 ord_item['order_code'], ord_item['customer_name'],
                                 ord_item['customer_phone'], ord_item['landmark'],
-                                items, ord_item['total_amount'], ord_item['created_at']
+                                items, float(ord_item['total_amount']), str(ord_item['created_at'])
                             )
                             st.download_button(
                                 label="Download Receipt",
@@ -616,17 +650,17 @@ elif st.session_state.active_nav == "Track / My Orders":
         else:
             for ord_item in my_orders:
                 items = json.loads(ord_item['items_json'])
-                with st.expander(f"Order {ord_item['order_code']} — Status: `{ord_item['status']}` — KSh {ord_item['total_amount']:,.2f}"):
+                with st.expander(f"Order {ord_item['order_code']} — Status: `{ord_item['status']}` — KSh {float(ord_item['total_amount']):,.2f}"):
                     st.write(f"**Placed On:** {ord_item['created_at']}")
                     st.write(f"**Address/Landmark:** {ord_item['landmark']}")
                     st.write("**Items Ordered:**")
                     for it in items:
-                        st.write(f"- {it['title']} x {it.get('quantity', 1)} (KSh {it['price']:,.2f})")
+                        st.write(f"- {it['title']} x {it.get('quantity', 1)} (KSh {float(it['price']):,.2f})")
                     
                     receipt_data = generate_receipt_text(
                         ord_item['order_code'], ord_item['customer_name'],
                         ord_item['customer_phone'], ord_item['landmark'],
-                        items, ord_item['total_amount'], ord_item['created_at']
+                        items, float(ord_item['total_amount']), str(ord_item['created_at'])
                     )
                     st.download_button(
                         label="Download Receipt",
@@ -675,7 +709,7 @@ elif st.session_state.active_nav == "Customer Reviews":
 # ==========================================
 # VIEW 5: ADMIN PORTAL
 # ==========================================
-elif st.session_state.active_nav == "Admin Portal" and st.session_state.admin_logged_in:
+elif st.session_state.active_nav == "Admin access" and st.session_state.admin_logged_in:
     st.title("⚙️ Admin Management Portal")
     
     tab1, tab2, tab3, tab4 = st.tabs(["Manage Orders", "Manage Products", "Manage Reviews", "Store & Admin Settings"])
@@ -696,7 +730,7 @@ elif st.session_state.active_nav == "Admin Portal" and st.session_state.admin_lo
                 with st.expander(f"Order {ord_item['order_code']} - {ord_item['customer_name']} [{ord_item['status']}]"):
                     st.write(f"**Phone:** {ord_item['customer_phone']}")
                     st.write(f"**Landmark:** {ord_item['landmark']}")
-                    st.write(f"**Total:** KSh {ord_item['total_amount']:,.2f}")
+                    st.write(f"**Total:** KSh {float(ord_item['total_amount']):,.2f}")
                     st.write(f"**Created At:** {ord_item['created_at']}")
                     
                     if ord_item['latitude'] and ord_item['longitude']:
@@ -710,12 +744,12 @@ elif st.session_state.active_nav == "Admin Portal" and st.session_state.admin_lo
                     st.write("**Items:**")
                     for it in items:
                         qty = it.get('quantity', 1)
-                        st.write(f"- {it['title']} (KSh {it['price']:,.2f} x {qty})")
+                        st.write(f"- {it['title']} (KSh {float(it['price']):,.2f} x {qty})")
                     
                     receipt_data = generate_receipt_text(
                         ord_item['order_code'], ord_item['customer_name'],
                         ord_item['customer_phone'], ord_item['landmark'],
-                        items, ord_item['total_amount'], ord_item['created_at']
+                        items, float(ord_item['total_amount']), str(ord_item['created_at'])
                     )
                     st.download_button(
                         label="🖨️ Print / Download Receipt",
@@ -790,7 +824,7 @@ elif st.session_state.active_nav == "Admin Portal" and st.session_state.admin_lo
                 with col1:
                     st.write(f"**{p['title']}**")
                 with col2:
-                    st.write(f"KSh {p['price']:,.2f}")
+                    st.write(f"KSh {float(p['price']):,.2f}")
                 with col3:
                     stock_text = "In Stock" if p['in_stock'] else "Out of Stock"
                     if st.button(f"Toggle ({stock_text})", key=f"tog_{p['id']}"):
